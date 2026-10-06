@@ -2,6 +2,8 @@
 
 namespace App\Http\Middleware;
 
+use App\Enums\SaleStatus;
+use App\Models\Store;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
@@ -28,6 +30,35 @@ class HandleInertiaRequests extends Middleware
     }
 
     /**
+     * The store being managed, only exposed when the signed-in user is a member of it.
+     *
+     * @return array{id: int, name: string, public_token: string, role: string, pending_sales_count: int}|null
+     */
+    private function currentStore(Request $request): ?array
+    {
+        $store = $request->route('store');
+        $user = $request->user();
+
+        if (! $store instanceof Store || $user === null) {
+            return null;
+        }
+
+        $membership = $user->stores()->whereKey($store->getKey())->first();
+
+        if ($membership === null) {
+            return null;
+        }
+
+        return [
+            'id' => $store->id,
+            'name' => $store->name,
+            'public_token' => $store->public_token,
+            'role' => $membership->pivot->role,
+            'pending_sales_count' => $store->sales()->where('status', SaleStatus::Pending)->count(),
+        ];
+    }
+
+    /**
      * Define the props that are shared by default.
      *
      * @see https://inertiajs.com/shared-data
@@ -44,6 +75,14 @@ class HandleInertiaRequests extends Middleware
             'quote' => ['message' => trim($message), 'author' => trim($author)],
             'auth' => [
                 'user' => $request->user(),
+            ],
+            'userStores' => fn () => $request->user()
+                ? $request->user()->stores()->orderBy('name')->get(['stores.id', 'stores.name'])->map->only(['id', 'name'])->values()
+                : [],
+            'currentStore' => fn () => $this->currentStore($request),
+            'flash' => [
+                'success' => fn () => $request->session()->get('success'),
+                'error' => fn () => $request->session()->get('error'),
             ],
         ]);
     }

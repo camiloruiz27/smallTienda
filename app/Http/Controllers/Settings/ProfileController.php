@@ -2,12 +2,14 @@
 
 namespace App\Http\Controllers\Settings;
 
+use App\Enums\StoreRole;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Settings\ProfileUpdateRequest;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -50,6 +52,12 @@ class ProfileController extends Controller
         ]);
 
         $user = $request->user();
+
+        if ($user->stores()->wherePivot('role', StoreRole::Owner->value)->exists()) {
+            throw ValidationException::withMessages([
+                'password' => 'Eres dueño de una tienda. Elimínala primero desde su configuración para poder borrar tu cuenta.',
+            ]);
+        }
 
         Auth::logout();
 
