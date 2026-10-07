@@ -135,7 +135,8 @@ jobs:
             mkdir -p storage/app/public storage/framework/cache/data storage/framework/sessions storage/framework/views storage/logs bootstrap/cache
             chmod -R ug+rwX storage bootstrap/cache
 
-            [ -e public/storage ] || php artisan storage:link
+            # Hostinger disables symlink()/exec() for PHP, so "php artisan storage:link" fails there; the shell can do it.
+            [ -L public/storage ] || [ -e public/storage ] || ln -s ../storage/app/public public/storage
 
             php artisan package:discover --ansi
             php artisan migrate --force
