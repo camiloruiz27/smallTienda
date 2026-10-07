@@ -26,6 +26,9 @@ class StoreSettingsRequest extends FormRequest
             'payment_instructions' => ['nullable', 'string', 'max:500'],
             'accepted_payment_methods' => ['required', 'array', 'min:1'],
             'accepted_payment_methods.*' => ['string', Rule::in(PaymentMethod::values())],
+            'notify_new_sales' => ['sometimes', 'boolean'],
+            'notify_payment_claims' => ['sometimes', 'boolean'],
+            'notify_low_stock' => ['sometimes', 'boolean'],
         ];
     }
 }

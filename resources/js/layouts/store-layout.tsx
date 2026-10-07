@@ -2,7 +2,7 @@ import BottomSheet from '@/components/bottom-sheet';
 import FlashMessage from '@/components/flash-message';
 import { cn } from '@/lib/utils';
 import { type SharedData } from '@/types';
-import { Head, Link, usePage } from '@inertiajs/react';
+import { Head, Link, router, usePage } from '@inertiajs/react';
 import {
     ArrowLeft,
     BarChart3,
@@ -13,6 +13,7 @@ import {
     History,
     Home,
     LogOut,
+    MailWarning,
     Menu,
     Package,
     Plus,
@@ -35,7 +36,8 @@ interface StoreLayoutProps {
 }
 
 export default function StoreLayout({ title, children, back, action, hideNav = false }: StoreLayoutProps) {
-    const { currentStore, userStores } = usePage<SharedData>().props;
+    const { currentStore, userStores, auth } = usePage<SharedData>().props;
+    const [verificationSent, setVerificationSent] = useState(false);
     const [moreOpen, setMoreOpen] = useState(false);
     const [storesOpen, setStoresOpen] = useState(false);
 
@@ -104,6 +106,31 @@ export default function StoreLayout({ title, children, back, action, hideNav = f
                     {action && <div className="flex shrink-0 items-center gap-1">{action}</div>}
                 </div>
             </header>
+
+            {auth.user && !auth.user.email_verified_at && (
+                <div
+                    className="bg-warning/10 mx-auto flex max-w-2xl flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5 text-sm print:hidden"
+                    role="status"
+                >
+                    <MailWarning className="text-warning size-5 shrink-0" aria-hidden />
+                    <p className="min-w-0 flex-1">
+                        {verificationSent
+                            ? 'Listo, revisa tu correo (y la carpeta de spam).'
+                            : 'Verifica tu correo para recibir los avisos de tu tienda.'}
+                    </p>
+                    {!verificationSent && (
+                        <button
+                            type="button"
+                            className="text-primary h-9 font-semibold"
+                            onClick={() =>
+                                router.post(route('verification.send'), {}, { preserveScroll: true, onSuccess: () => setVerificationSent(true) })
+                            }
+                        >
+                            Reenviar correo
+                        </button>
+                    )}
+                </div>
+            )}
 
             <main className={cn('mx-auto max-w-2xl', hideNav ? 'pb-8' : 'pb-28')}>{children}</main>
 
