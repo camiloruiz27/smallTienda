@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Enums\PaymentMethod;
 use App\Enums\StoreRole;
 use Database\Factories\StoreFactory;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -27,6 +28,9 @@ class Store extends Model
         'payment_qr_path',
         'payment_instructions',
         'accepted_payment_methods',
+        'notify_new_sales',
+        'notify_payment_claims',
+        'notify_low_stock',
     ];
 
     /**
@@ -36,7 +40,21 @@ class Store extends Model
     {
         return [
             'accepted_payment_methods' => 'array',
+            'notify_new_sales' => 'boolean',
+            'notify_payment_claims' => 'boolean',
+            'notify_low_stock' => 'boolean',
         ];
+    }
+
+    /**
+     * Members that should receive email alerts. Only verified addresses are used, so a mistyped
+     * email never receives information about the store.
+     *
+     * @return Collection<int, User>
+     */
+    public function notifiableMembers(): Collection
+    {
+        return $this->members()->whereNotNull('users.email_verified_at')->get();
     }
 
     /**

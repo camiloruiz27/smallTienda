@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Shop;
 
 use App\Enums\SaleStatus;
+use App\Events\PaymentClaimed;
 use App\Http\Controllers\Controller;
 use App\Models\Sale;
 use App\Models\Store;
@@ -18,6 +19,8 @@ class PaymentClaimController extends Controller
     {
         if ($sale->status === SaleStatus::Pending && $sale->paid_claimed_at === null) {
             $sale->update(['paid_claimed_at' => now()]);
+
+            PaymentClaimed::dispatch($sale);
         }
 
         return to_route('shop.receipt', [$store->public_token, $sale->code]);

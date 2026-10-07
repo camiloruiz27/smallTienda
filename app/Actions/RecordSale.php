@@ -5,9 +5,11 @@ namespace App\Actions;
 use App\Enums\MovementType;
 use App\Enums\PaymentMethod;
 use App\Enums\SaleStatus;
+use App\Events\SaleRecorded;
 use App\Models\Product;
 use App\Models\Sale;
 use App\Models\Store;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
@@ -43,8 +45,11 @@ class RecordSale
 
         $quantities = $this->mergeQuantities($items);
 
+        /** @var Collection<int, Product> $productsNowLow */
+        $productsNowLow = new Collection;
+
         try {
-            return DB::transaction(function () use ($store, $quantities, $paymentMethod, $submissionId, $customerName, $customerPhone): Sale {
+            $sale = DB::transaction(function () use ($store, $quantities, $paymentMethod, $submissionId, $customerName, $customerPhone, $productsNowLow): Sale {
                 $products = $store->products()->active()->whereKey(array_keys($quantities))->get()->keyBy('id');
 
                 if ($products->count() !== count($quantities)) {
@@ -79,7 +84,13 @@ class RecordSale
                         'subtotal' => $subtotal,
                     ]);
 
+                    $stockBefore = $product->stock;
                     $this->recordMovement->handle($product, MovementType::Sale, -$quantity, sale: $sale);
+
+                    // Only the purchase that crosses the minimum triggers the alert, not every later one.
+                    if ($stockBefore > $product->min_stock && $product->stock <= $product->min_stock) {
+                        $productsNowLow->push($product);
+                    }
                 }
 
                 $sale->update(['total' => $total]);
@@ -95,6 +106,10 @@ class RecordSale
 
             return $duplicate;
         }
+
+        SaleRecorded::dispatch($sale, $productsNowLow);
+
+        return $sale;
     }
 
     /**

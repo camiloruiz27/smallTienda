@@ -15,15 +15,29 @@ import { QRCodeSVG } from 'qrcode.react';
 import { ChangeEvent, FormEventHandler, useRef, useState } from 'react';
 
 interface SettingsProps {
-    settings: { name: string; payment_key: string | null; payment_instructions: string | null; accepted_payment_methods: string[] };
+    settings: {
+        name: string;
+        payment_key: string | null;
+        payment_instructions: string | null;
+        accepted_payment_methods: string[];
+        notify_new_sales: boolean;
+        notify_payment_claims: boolean;
+        notify_low_stock: boolean;
+    };
     paymentQrUrl: string | null;
     paymentMethods: PaymentMethodOption[];
     shopUrl: string;
     canEdit: boolean;
 }
 
+const emailAlerts = [
+    { key: 'notify_new_sales', label: 'Compra nueva', hint: 'Cada vez que un cliente registra una compra.' },
+    { key: 'notify_payment_claims', label: '«Ya pagué»', hint: 'Cuando un cliente avisa que ya hizo el pago.' },
+    { key: 'notify_low_stock', label: 'Stock bajo', hint: 'Cuando un producto llega a su mínimo por una compra.' },
+] as const;
+
 export default function Settings({ settings, paymentQrUrl, paymentMethods, shopUrl, canEdit }: SettingsProps) {
-    const store = usePage<SharedData>().props.currentStore!;
+    const { currentStore: store, auth } = usePage<SharedData>().props as SharedData & { currentStore: NonNullable<SharedData['currentStore']> };
     const [copied, setCopied] = useState(false);
     const [confirmingRotate, setConfirmingRotate] = useState(false);
     const [rotating, setRotating] = useState(false);
@@ -39,6 +53,9 @@ export default function Settings({ settings, paymentQrUrl, paymentMethods, shopU
         remove_payment_qr: boolean;
         payment_instructions: string;
         accepted_payment_methods: string[];
+        notify_new_sales: boolean;
+        notify_payment_claims: boolean;
+        notify_low_stock: boolean;
     }>({
         name: settings.name,
         payment_key: settings.payment_key ?? '',
@@ -46,6 +63,9 @@ export default function Settings({ settings, paymentQrUrl, paymentMethods, shopU
         remove_payment_qr: false,
         payment_instructions: settings.payment_instructions ?? '',
         accepted_payment_methods: settings.accepted_payment_methods,
+        notify_new_sales: settings.notify_new_sales,
+        notify_payment_claims: settings.notify_payment_claims,
+        notify_low_stock: settings.notify_low_stock,
     });
 
     const handleQr = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -253,6 +273,28 @@ export default function Settings({ settings, paymentQrUrl, paymentMethods, shopU
                             );
                         })}
                         <InputError message={errors.accepted_payment_methods} />
+                    </fieldset>
+
+                    <fieldset className="grid gap-2" disabled={!canEdit}>
+                        <legend className="mb-1 text-sm font-medium">Avisos por correo</legend>
+                        {emailAlerts.map((alert) => (
+                            <label key={alert.key} className="flex min-h-14 items-center justify-between gap-3 rounded-xl border px-4 py-2">
+                                <span>
+                                    <span className="block font-medium">{alert.label}</span>
+                                    <span className="text-muted-foreground block text-xs">{alert.hint}</span>
+                                </span>
+                                <input
+                                    type="checkbox"
+                                    checked={data[alert.key]}
+                                    onChange={(event) => setData(alert.key, event.target.checked)}
+                                    className="accent-primary size-6 shrink-0"
+                                />
+                            </label>
+                        ))}
+                        <p className="text-muted-foreground text-xs">
+                            Llegan al correo de cada persona de la tienda, siempre que lo haya verificado.
+                            {!auth.user.email_verified_at && ' El tuyo aún no está verificado.'}
+                        </p>
                     </fieldset>
 
                     {canEdit ? (

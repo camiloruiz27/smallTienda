@@ -18,7 +18,10 @@ class StoreSettingsController extends Controller
     public function edit(Request $request, Store $store): Response
     {
         return Inertia::render('store/settings', [
-            'settings' => $store->only(['name', 'payment_key', 'payment_instructions', 'accepted_payment_methods']),
+            'settings' => $store->only([
+                'name', 'payment_key', 'payment_instructions', 'accepted_payment_methods',
+                'notify_new_sales', 'notify_payment_claims', 'notify_low_stock',
+            ]),
             'paymentQrUrl' => $store->paymentQrUrl(),
             'paymentMethods' => PaymentMethod::options(),
             'shopUrl' => route('shop.show', $store->public_token),
