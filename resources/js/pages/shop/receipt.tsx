@@ -3,8 +3,8 @@ import ShopLayout from '@/layouts/shop-layout';
 import { copyText } from '@/lib/clipboard';
 import { formatCOP, formatDateTime } from '@/lib/format';
 import { cn } from '@/lib/utils';
-import { Link } from '@inertiajs/react';
-import { Banknote, Check, CheckCircle2, ChevronDown, Copy, Download, Smartphone } from 'lucide-react';
+import { Link, router } from '@inertiajs/react';
+import { BadgeCheck, Banknote, Check, CheckCircle2, ChevronDown, Copy, Download, LoaderCircle, Smartphone } from 'lucide-react';
 import { useState } from 'react';
 
 interface ReceiptProps {
@@ -23,6 +23,7 @@ interface ReceiptProps {
         payment_method_label: string;
         total: number;
         customer_name: string | null;
+        paid_claimed: boolean;
         created_at: string;
         items: { id: number; product_name: string; unit_price: number; quantity: number; subtotal: number }[];
     };
@@ -30,9 +31,15 @@ interface ReceiptProps {
 
 export default function Receipt({ store, sale }: ReceiptProps) {
     const [copied, setCopied] = useState<'key' | 'total' | null>(null);
+    const [claiming, setClaiming] = useState(false);
     const isVoided = sale.status === 'voided';
     const needsPayment = sale.status === 'pending';
     const unitCount = sale.items.reduce((sum, item) => sum + item.quantity, 0);
+
+    const markPaid = () => {
+        setClaiming(true);
+        router.post(route('shop.paid', [store.token, sale.code]), {}, { preserveScroll: true, onFinish: () => setClaiming(false) });
+    };
 
     const copy = async (what: 'key' | 'total', text: string) => {
         if (await copyText(text)) {
@@ -120,6 +127,18 @@ export default function Receipt({ store, sale }: ReceiptProps) {
                         <p className="text-sm whitespace-pre-line">{store.payment_instructions || 'Deja el efectivo en la tienda.'}</p>
                     </section>
                 )}
+
+                {needsPayment &&
+                    (sale.paid_claimed ? (
+                        <p className="bg-success/10 text-success flex items-center gap-2 rounded-2xl p-4 text-sm font-medium" role="status">
+                            <BadgeCheck className="size-5 shrink-0" aria-hidden />
+                            Listo, avisamos al encargado. Él confirmará tu pago.
+                        </p>
+                    ) : (
+                        <Button type="button" size="lg" className="h-14 text-base" onClick={markPaid} disabled={claiming}>
+                            {claiming ? <LoaderCircle className="animate-spin" /> : <BadgeCheck />} Ya pagué
+                        </Button>
+                    ))}
 
                 {!needsPayment && (
                     <div className="bg-card rounded-2xl border p-4 text-center">

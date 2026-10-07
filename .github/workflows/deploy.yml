@@ -1,0 +1,146 @@
+name: Deploy to Hostinger
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+# Never run two deploys at once, and never cancel one halfway.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+env:
+  # Folder on Hostinger that contains artisan (the web root must be its "public" subfolder).
+  APP_PATH: /home/u206029413/domains/dmostienda.cramultimedia.com/public_html
+  # Temporary folder where the release is uploaded before being extracted.
+  UPLOAD_PATH: /home/u206029413/deploy
+
+jobs:
+  tests:
+    name: Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.2"
+          tools: composer:v2
+
+      - name: Install dependencies
+        run: composer install --no-interaction --prefer-dist --optimize-autoloader
+
+      - name: Prepare environment
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+
+      - name: Run tests
+        run: ./vendor/bin/phpunit
+
+  deploy:
+    name: Build and deploy
+    needs: tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.2"
+          tools: composer:v2
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      # Same PHP version as the server, without dev tools, so vendor/ is ready to run in production.
+      - name: Install PHP dependencies (production)
+        run: composer install --no-dev --no-interaction --prefer-dist --optimize-autoloader --no-scripts
+
+      - name: Build frontend
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build
+          test -f public/build/manifest.json
+
+      # Only what the app needs at runtime. .env, uploaded files and logs live on the server and are never touched.
+      - name: Package release
+        run: |
+          tar -czf release.tar.gz \
+            --exclude='public/hot' \
+            --exclude='public/storage' \
+            --exclude='storage/app/public/*' \
+            --exclude='storage/logs/*' \
+            --exclude='storage/framework/cache/data/*' \
+            --exclude='storage/framework/sessions/*' \
+            --exclude='storage/framework/views/*' \
+            --exclude='database/*.sqlite' \
+            app bootstrap config database lang public resources/views routes storage vendor \
+            artisan composer.json composer.lock
+          ls -lh release.tar.gz
+
+      - name: Prepare upload folder
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.HOSTINGER_HOST }}
+          username: ${{ secrets.HOSTINGER_USER }}
+          key: ${{ secrets.HOSTINGER_SSH_KEY }}
+          port: ${{ secrets.HOSTINGER_PORT || 65002 }}
+          envs: UPLOAD_PATH
+          script: |
+            mkdir -p "$UPLOAD_PATH"
+            rm -f "$UPLOAD_PATH/release.tar.gz"
+
+      - name: Upload release
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.HOSTINGER_HOST }}
+          username: ${{ secrets.HOSTINGER_USER }}
+          key: ${{ secrets.HOSTINGER_SSH_KEY }}
+          port: ${{ secrets.HOSTINGER_PORT || 65002 }}
+          source: "release.tar.gz"
+          target: ${{ env.UPLOAD_PATH }}
+
+      - name: Install release and update the app
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.HOSTINGER_HOST }}
+          username: ${{ secrets.HOSTINGER_USER }}
+          key: ${{ secrets.HOSTINGER_SSH_KEY }}
+          port: ${{ secrets.HOSTINGER_PORT || 65002 }}
+          envs: APP_PATH,UPLOAD_PATH
+          script_stop: true
+          script: |
+            set -e
+
+            php -r 'exit(PHP_VERSION_ID >= 80200 ? 0 : 1);' || { echo "El PHP de la terminal del servidor es menor a 8.2:"; php -v; exit 1; }
+
+            mkdir -p "$APP_PATH"
+            tar -xzf "$UPLOAD_PATH/release.tar.gz" -C "$APP_PATH"
+            rm -f "$UPLOAD_PATH/release.tar.gz"
+
+            cd "$APP_PATH"
+            test -f .env || { echo "Falta el archivo .env en $APP_PATH. Créalo una sola vez a mano (ver README del despliegue)."; exit 1; }
+
+            mkdir -p storage/app/public storage/framework/cache/data storage/framework/sessions storage/framework/views storage/logs bootstrap/cache
+            chmod -R ug+rwX storage bootstrap/cache
+
+            [ -e public/storage ] || php artisan storage:link
+
+            php artisan package:discover --ansi
+            php artisan migrate --force
+            php artisan optimize:clear
+            php artisan optimize
+
+            ls -la public/build/manifest.json
+            echo "Despliegue terminado."

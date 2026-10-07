@@ -21,6 +21,8 @@ class SaleController extends Controller
         $sales = $store->sales()
             ->where('status', $status)
             ->with('items:id,sale_id,product_name,quantity,subtotal')
+            // Sales whose customer already said they paid go first so the owner verifies those in the bank app first.
+            ->orderByRaw('CASE WHEN paid_claimed_at IS NULL THEN 1 ELSE 0 END')
             ->latest()
             ->paginate(15)
             ->withQueryString()
@@ -32,6 +34,7 @@ class SaleController extends Controller
                 'payment_method' => $sale->payment_method->label(),
                 'status' => $sale->status->value,
                 'total' => $sale->total,
+                'paid_claimed' => $sale->paid_claimed_at !== null,
                 'created_at' => $sale->created_at->toIso8601String(),
                 'items' => $sale->items->map->only(['id', 'product_name', 'quantity', 'subtotal'])->values(),
             ]);

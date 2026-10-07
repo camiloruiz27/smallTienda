@@ -37,6 +37,7 @@ class DashboardController extends Controller
             'pendingSales' => $store->sales()
                 ->where('status', SaleStatus::Pending)
                 ->withCount('items')
+                ->orderByRaw('CASE WHEN paid_claimed_at IS NULL THEN 1 ELSE 0 END')
                 ->latest()
                 ->limit(5)
                 ->get()
@@ -47,6 +48,7 @@ class DashboardController extends Controller
                     'payment_method' => $sale->payment_method->label(),
                     'total' => $sale->total,
                     'items_count' => $sale->items_count,
+                    'paid_claimed' => $sale->paid_claimed_at !== null,
                     'created_at' => $sale->created_at->toIso8601String(),
                 ]),
             'attention' => $attention,

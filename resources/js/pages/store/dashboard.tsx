@@ -26,6 +26,7 @@ interface PendingSale {
     payment_method: string;
     total: number;
     items_count: number;
+    paid_claimed: boolean;
     created_at: string;
 }
 
@@ -127,7 +128,12 @@ export default function Dashboard({ stats, pendingSales, attention }: DashboardP
                                         className="hover:bg-accent flex min-h-16 items-center gap-3 px-4 py-3"
                                     >
                                         <span className="min-w-0 flex-1">
-                                            <span className="block truncate font-medium">{sale.customer_name || 'Cliente sin nombre'}</span>
+                                            <span className="block truncate font-medium">
+                                                {sale.customer_name || 'Cliente sin nombre'}
+                                                {sale.paid_claimed && (
+                                                    <span className="text-success ml-2 text-xs font-semibold">· Dice que ya pagó</span>
+                                                )}
+                                            </span>
                                             <span className="text-muted-foreground block text-xs">
                                                 {sale.items_count} {sale.items_count === 1 ? 'producto' : 'productos'} · {sale.payment_method} ·{' '}
                                                 {formatRelative(sale.created_at)}

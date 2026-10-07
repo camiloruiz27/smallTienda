@@ -34,6 +34,7 @@ class Sale extends Model
         'total',
         'confirmed_by',
         'confirmed_at',
+        'paid_claimed_at',
     ];
 
     /**
@@ -46,6 +47,7 @@ class Sale extends Model
             'status' => SaleStatus::class,
             'total' => 'integer',
             'confirmed_at' => 'datetime',
+            'paid_claimed_at' => 'datetime',
         ];
     }
 

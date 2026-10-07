@@ -6,7 +6,7 @@ import { formatCOP, formatDateTime } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { type Paginated, type SharedData } from '@/types';
 import { Link, router, usePage } from '@inertiajs/react';
-import { Check, ChevronDown, LoaderCircle, Phone, Receipt, Undo2 } from 'lucide-react';
+import { BadgeCheck, Check, ChevronDown, LoaderCircle, Phone, Receipt, Undo2 } from 'lucide-react';
 import { useState } from 'react';
 
 interface SaleItem {
@@ -24,6 +24,7 @@ interface Sale {
     payment_method: string;
     status: 'pending' | 'confirmed' | 'voided';
     total: number;
+    paid_claimed: boolean;
     created_at: string;
     items: SaleItem[];
 }
@@ -110,6 +111,11 @@ export default function SalesIndex({ sales, status, counts }: SalesIndexProps) {
                                 >
                                     <span className="min-w-0 flex-1">
                                         <span className="block truncate font-semibold">{sale.customer_name || 'Cliente sin nombre'}</span>
+                                        {sale.status === 'pending' && sale.paid_claimed && (
+                                            <span className="bg-success/10 text-success mt-0.5 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold">
+                                                <BadgeCheck className="size-3.5" aria-hidden /> Dice que ya pagó
+                                            </span>
+                                        )}
                                         <span className="text-muted-foreground block text-xs">
                                             {sale.payment_method} · {formatDateTime(sale.created_at)} · {sale.code}
                                         </span>

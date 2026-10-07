@@ -51,6 +51,7 @@ class ShopController extends Controller
                 'payment_method_label' => $sale->payment_method->label(),
                 'total' => $sale->total,
                 'customer_name' => $sale->customer_name,
+                'paid_claimed' => $sale->paid_claimed_at !== null,
                 'created_at' => $sale->created_at->toIso8601String(),
                 'items' => $sale->items()->get()->map->only(['id', 'product_name', 'unit_price', 'quantity', 'subtotal'])->values(),
             ],
