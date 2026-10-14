@@ -21,6 +21,7 @@ interface ShopProduct {
     price: number;
     category_id: number | null;
     image_url: string | null;
+    in_stock: boolean;
 }
 
 interface ShopProps {
@@ -67,7 +68,7 @@ export default function Shop({ store, paymentMethods, categories, products }: Sh
     }, [notice]);
 
     const productsById = useMemo(() => new Map(products.map((product) => [product.id, product])), [products]);
-    const cartLines = cart.lines.filter((line) => productsById.has(line.productId));
+    const cartLines = cart.lines.filter((line) => productsById.get(line.productId)?.in_stock);
     const itemCount = cartLines.reduce((sum, line) => sum + line.quantity, 0);
     const total = cartLines.reduce((sum, line) => sum + (productsById.get(line.productId)?.price ?? 0) * line.quantity, 0);
 
@@ -81,7 +82,9 @@ export default function Shop({ store, paymentMethods, categories, products }: Sh
 
     const handleScan = (code: string) => {
         const match = products.find((product) => product.barcode === code);
-        if (match) {
+        if (match && !match.in_stock) {
+            setNotice(`${match.name} está agotado.`);
+        } else if (match) {
             cart.add(match.id);
             setNotice(`Agregado: ${match.name}`);
         } else {
@@ -164,7 +167,7 @@ export default function Shop({ store, paymentMethods, categories, products }: Sh
 
                     <ul className="grid grid-cols-2 gap-3 p-4 pb-32">
                         {visible.map((product) => {
-                            const quantity = cart.quantityOf(product.id);
+                            const quantity = product.in_stock ? cart.quantityOf(product.id) : 0;
 
                             return (
                                 <li
@@ -177,14 +180,25 @@ export default function Shop({ store, paymentMethods, categories, products }: Sh
                                     <button
                                         type="button"
                                         onClick={() => cart.add(product.id)}
-                                        className="text-left"
-                                        aria-label={`Agregar ${product.name}`}
+                                        disabled={!product.in_stock}
+                                        className="text-left disabled:cursor-not-allowed"
+                                        aria-label={product.in_stock ? `Agregar ${product.name}` : `${product.name} (agotado)`}
                                     >
                                         <div className="bg-muted text-muted-foreground relative flex aspect-square items-center justify-center">
                                             {product.image_url ? (
-                                                <img src={product.image_url} alt="" loading="lazy" className="size-full object-cover" />
+                                                <img
+                                                    src={product.image_url}
+                                                    alt=""
+                                                    loading="lazy"
+                                                    className={cn('size-full object-cover', !product.in_stock && 'opacity-40 grayscale')}
+                                                />
                                             ) : (
-                                                <Package className="size-10" aria-hidden />
+                                                <Package className={cn('size-10', !product.in_stock && 'opacity-40')} aria-hidden />
+                                            )}
+                                            {!product.in_stock && (
+                                                <span className="bg-destructive text-destructive-foreground absolute top-2 left-2 rounded-full px-2.5 py-0.5 text-xs font-semibold">
+                                                    Agotado
+                                                </span>
                                             )}
                                         </div>
                                         <div className="p-3 pb-2">
@@ -193,7 +207,11 @@ export default function Shop({ store, paymentMethods, categories, products }: Sh
                                         </div>
                                     </button>
                                     <div className="mt-auto p-2 pt-0">
-                                        {quantity === 0 ? (
+                                        {!product.in_stock ? (
+                                            <Button className="h-11 w-full" variant="secondary" disabled>
+                                                Agotado
+                                            </Button>
+                                        ) : quantity === 0 ? (
                                             <Button className="h-11 w-full" variant="secondary" onClick={() => cart.add(product.id)}>
                                                 <Plus /> Agregar
                                             </Button>
