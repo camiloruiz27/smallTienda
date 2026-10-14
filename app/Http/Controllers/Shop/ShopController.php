@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Shop;
 
 use App\Http\Controllers\Controller;
+use App\Models\Product;
 use App\Models\Sale;
 use App\Models\Store;
 use Inertia\Inertia;
@@ -11,7 +12,8 @@ use Inertia\Response;
 class ShopController extends Controller
 {
     /**
-     * Public catalog the customer reaches by scanning the store QR. Exact stock is never exposed.
+     * Public catalog the customer reaches by scanning the store QR. Exact stock is never exposed,
+     * only whether the product can still be bought.
      */
     public function show(Store $store): Response
     {
@@ -27,8 +29,11 @@ class ShopController extends Controller
             'products' => $store->products()
                 ->active()
                 ->orderBy('name')
-                ->get(['id', 'name', 'barcode', 'price', 'category_id', 'image_path'])
-                ->map->only(['id', 'name', 'barcode', 'price', 'category_id', 'image_url'])
+                ->get(['id', 'name', 'barcode', 'price', 'stock', 'category_id', 'image_path'])
+                ->map(fn (Product $product): array => [
+                    ...$product->only(['id', 'name', 'barcode', 'price', 'category_id', 'image_url']),
+                    'in_stock' => $product->stock > 0,
+                ])
                 ->values(),
         ]);
     }

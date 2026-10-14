@@ -85,16 +85,65 @@ class CheckoutTest extends TestCase
         $this->assertSame(8, $product->fresh()->stock);
     }
 
-    public function test_purchase_is_accepted_when_recorded_stock_is_zero_and_stock_goes_negative(): void
+    public function test_shop_flags_sold_out_products_without_exposing_exact_stock(): void
+    {
+        $store = Store::factory()->create();
+        Product::factory()->for($store)->create(['name' => 'Disponible', 'stock' => 3]);
+        Product::factory()->for($store)->outOfStock()->create(['name' => 'Agotado cero']);
+        Product::factory()->for($store)->negativeStock()->create(['name' => 'Agotado negativo']);
+
+        $this->get(route('shop.show', $store->public_token))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->has('products', 3)
+                ->where('products.0.name', 'Agotado cero')
+                ->where('products.0.in_stock', false)
+                ->where('products.1.name', 'Agotado negativo')
+                ->where('products.1.in_stock', false)
+                ->where('products.2.name', 'Disponible')
+                ->where('products.2.in_stock', true)
+                ->missing('products.2.stock'));
+    }
+
+    public function test_sold_out_products_cannot_be_purchased(): void
     {
         $store = Store::factory()->create();
         $product = Product::factory()->for($store)->outOfStock()->create();
 
         $this->post(route('shop.checkout', $store->public_token), $this->payload($product, 1))
+            ->assertSessionHasErrors('items');
+
+        $this->assertSame(0, Sale::count());
+        $this->assertSame(0, $product->fresh()->stock);
+    }
+
+    public function test_purchase_is_rejected_when_quantity_exceeds_available_stock(): void
+    {
+        $store = Store::factory()->create();
+        $available = Product::factory()->for($store)->create(['stock' => 5]);
+        $scarce = Product::factory()->for($store)->create(['stock' => 1]);
+
+        $this->post(route('shop.checkout', $store->public_token), $this->payload($available, 2, [
+            'items' => [
+                ['product_id' => $available->id, 'quantity' => 2],
+                ['product_id' => $scarce->id, 'quantity' => 2],
+            ],
+        ]))->assertSessionHasErrors('items');
+
+        $this->assertSame(0, Sale::count());
+        $this->assertSame(5, $available->fresh()->stock);
+        $this->assertSame(1, $scarce->fresh()->stock);
+    }
+
+    public function test_purchase_of_the_last_units_is_accepted(): void
+    {
+        $store = Store::factory()->create();
+        $product = Product::factory()->for($store)->create(['stock' => 2]);
+
+        $this->post(route('shop.checkout', $store->public_token), $this->payload($product, 2))
             ->assertSessionHasNoErrors();
 
-        $this->assertSame(1, Sale::count());
-        $this->assertSame(-1, $product->fresh()->stock);
+        $this->assertSame(0, $product->fresh()->stock);
     }
 
     public function test_the_same_product_listed_twice_is_merged_into_one_line(): void

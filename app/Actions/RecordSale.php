@@ -24,8 +24,7 @@ class RecordSale
      * Register a self-service purchase. Idempotent per `submission_id`: repeating the same submission
      * returns the sale that was already created instead of discounting stock twice.
      *
-     * Stock is allowed to go negative on purpose: the customer already holds the product, so the
-     * mismatch is surfaced to the owner as a count discrepancy rather than blocking the purchase.
+     * Products without enough recorded stock are rejected, so the shop never sells what is sold out.
      *
      * @param  list<array{product_id: int, quantity: int}>  $items
      */
@@ -50,11 +49,19 @@ class RecordSale
 
         try {
             $sale = DB::transaction(function () use ($store, $quantities, $paymentMethod, $submissionId, $customerName, $customerPhone, $productsNowLow): Sale {
-                $products = $store->products()->active()->whereKey(array_keys($quantities))->get()->keyBy('id');
+                $products = $store->products()->active()->whereKey(array_keys($quantities))->lockForUpdate()->get()->keyBy('id');
 
                 if ($products->count() !== count($quantities)) {
                     throw ValidationException::withMessages([
                         'items' => 'Algún producto ya no está disponible. Actualiza la página e inténtalo de nuevo.',
+                    ]);
+                }
+
+                $soldOut = $products->filter(fn (Product $product): bool => $product->stock < $quantities[$product->id]);
+
+                if ($soldOut->isNotEmpty()) {
+                    throw ValidationException::withMessages([
+                        'items' => 'Sin existencias suficientes de: '.$soldOut->pluck('name')->join(', ').'. Quítalos de tu compra e inténtalo de nuevo.',
                     ]);
                 }
 
